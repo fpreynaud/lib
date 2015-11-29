@@ -6,12 +6,12 @@
 #include <unistd.h>
 #include <iostream>
 #include <signal.h>
-#include "ThreadPopulation.h"
+#include "ThreadPopulation.cpp"
+
 #define DEFAULT_MGENS 500
 #define DEFAULT_TFTNS 70
 #define DEFAULT_TLIMT 5
 #define st_args ((SelectArgs<IndT, ThreadPopulation<IndT> >*)args)
-#define tc_args ((timeCheckArgs<IndT>*)args)
 
 template<class IndT, class PopT>
 class SelectArgs
@@ -65,7 +65,6 @@ class SelectArgs
 			return *this;
 		};
 };
-
 
 template<class IndT, class PopT>
 class AbstractGenAlg
@@ -124,61 +123,36 @@ class AbstractGenAlg
 		virtual IndT run() = 0;
 };
 
-
-template<class IndT>
-class timeCheckArgs
-{
-	private:
-		pthread_t thread_num;
-		int timeLimit;
-		IndT* best;
-
-	public:
-		//Constructors----------------------------------------------------------
-		//Valued constructor
-		timeCheckArgs(pthread_t n, int t, IndT* b) :
-			thread_num(n),
-			timeLimit(t),
-		best(b){};
-
-			//Getters---------------------------------------------------------------
-		pthread_t getThreadNum() { return thread_num; };
-		int getTimeLimit() { return timeLimit; }
-		IndT getBest() { return *best;}
-};
-
 template<class IndT, class PopT>
 class ThreadGenAlg : public AbstractGenAlg<IndT, PopT>
 {
 	private:
 		pthread_t* selectParent;
-		pthread_t timeCheckThread;
 		SelectArgs<IndT, PopT> selectArgs;
 		IndT* nextPop;
 
 	protected:
-		//Thread routines-------------------------------------------------------
-		static void* timeCheck(void* args)
+		class TimeCheckThread : public Thread<int>
 		{
-#ifdef DEBUG
-			std::cout << __func__ << "(" << pthread_self()%10 << ")\n";
-			for(int i = 0 ; i < 60 * tc_args->getTimeLimit(); i++)
-			{
-				std::cout << "about " << i/60 << " minutes and " << i%60 <<
-					" seconds elapsed\n";
-				std::cout << "time limit : " << tc_args->getTimeLimit() <<
-					"minutes\n";
-				sleep(1);
-			}
-#endif
-			sleep(60*tc_args->getTimeLimit());
-			std::cout << "time is up\n";
-			std::cout << tc_args->getBest() << "\n" ;
-			pthread_kill(tc_args->getThreadNum(), SIGTERM);
+			private:
+				pthread_t target;
+				int timeLimit;
+				IndT* best;
 
-			return NULL;
-		}
+			public:
+				TimeCheckThread(pthread_t tgt, int tLimit, IndT* bst): Thread<int>(), target(tgt), timeLimit(tLimit), best(bst){}
 
+				int run()
+				{
+					sleep(60 * timeLimit);
+					std::cout << "\033[31mTime is up\033[0m\n";
+					std::cout << *best << "\n" ;
+					retVal = pthread_kill(target, SIGTERM);
+					return retVal;
+				}
+		};
+
+		//Thread routines-------------------------------------------------------
 		static void* SelectThread(void* args)
 		{
 #ifdef DEBUG
@@ -195,12 +169,7 @@ class ThreadGenAlg : public AbstractGenAlg<IndT, PopT>
 		ThreadGenAlg() {}
 
 		//Valued constructor
-		ThreadGenAlg(
-				PopT& p,
-				int mGens = DEFAULT_MGENS,
-				float tFtns = DEFAULT_TFTNS,
-				int tLimit = DEFAULT_TLIMT) :
-			AbstractGenAlg<IndT, PopT>(p, mGens, tFtns, tLimit)
+		ThreadGenAlg( PopT& p, int mGens = DEFAULT_MGENS, float tFtns = DEFAULT_TFTNS, int tLimit = DEFAULT_TLIMT) : AbstractGenAlg<IndT, PopT>(p, mGens, tFtns, tLimit)
 		{
 #ifdef DEBUG
 			std::cout << __func__ << "\n";
@@ -226,12 +195,12 @@ class ThreadGenAlg : public AbstractGenAlg<IndT, PopT>
 			int nbSelectThreads = 4;
 			IndT* parents = new IndT[nbSelectThreads];
 			SelectArgs<IndT, PopT> *args = new SelectArgs<IndT, PopT>[nbSelectThreads];
-			pthread_t tNum = pthread_self();
-			timeCheckArgs<IndT> tcArgs(tNum, this->timeLimit, &this->best);
+			TimeCheckThread timer(pthread_self(), this->timeLimit, &this->best);
 			srand(time(0));
 
 			//start timer
-			pthread_create(&timeCheckThread, NULL, timeCheck, &tcArgs);
+			timer.start();
+			//pthread_create(&timeCheckThread, NULL, timeCheck, &tcArgs);
 
 			//fill arguments structure for selection threads
 			for(int i = 0; i < nbSelectThreads; i++)

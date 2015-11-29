@@ -1,7 +1,7 @@
 #ifndef BASETHREADPOPULATION_H
 #define BASETHREADPOPULATION_H
-#include <AbstractPopulation.h>
-#include <pthread.h>
+#include <AbstractPopulation.cpp>
+#include <thread.cpp>
 #include <cstdlib>
 #include <iostream>
 
