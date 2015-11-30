@@ -11,60 +11,6 @@
 #define DEFAULT_MGENS 500
 #define DEFAULT_TFTNS 70
 #define DEFAULT_TLIMT 5
-#define st_args ((SelectArgs<IndT, ThreadPopulation<IndT> >*)args)
-
-template<class IndT, class PopT>
-class SelectArgs
-{
-	private:
-		PopT* population;
-		IndT ret;
-
-	public:
-		//Constructors----------------------------------------------------------
-		//Default constructor
-		SelectArgs() { };
-
-		//Valued constructor
-		SelectArgs(PopT* p): population(p)
-		{
-#ifdef DEBUG
-			std::cout << "SelectArgs::" << __func__ << "(" << p << ")\n";
-#endif
-		};
-
-		//Copy constructor
-		SelectArgs(const SelectArgs<IndT, PopT>& src): ret(src.ret) {}
-
-		//Getters---------------------------------------------------------------
-		IndT getRet() const { return ret; };
-
-		PopT* getPopulation()
-		{
-#ifdef DEBUG
-			std::cout << "SelectArgs::" << __func__ << "\n";
-#endif
-			return population;
-		};
-
-		//Setters---------------------------------------------------------------
-		void setRet(IndT val)
-		{
-#ifdef DEBUG
-			std::cout << "SelectArgs::" << __func__ << "\n";
-#endif
-			ret = val;
-		};
-
-		//Operators-------------------------------------------------------------
-		SelectArgs& operator=(const SelectArgs& args)
-		{
-			population = args.population;
-			ret = args.ret;
-
-			return *this;
-		};
-};
 
 template<class IndT, class PopT>
 class AbstractGenAlg
@@ -127,8 +73,6 @@ template<class IndT, class PopT>
 class ThreadGenAlg : public AbstractGenAlg<IndT, PopT>
 {
 	private:
-		pthread_t* selectParent;
-		SelectArgs<IndT, PopT> selectArgs;
 		IndT* nextPop;
 
 	protected:
@@ -140,28 +84,30 @@ class ThreadGenAlg : public AbstractGenAlg<IndT, PopT>
 				IndT* best;
 
 			public:
-				TimeCheckThread(pthread_t tgt, int tLimit, IndT* bst): Thread<int>(), target(tgt), timeLimit(tLimit), best(bst){}
+				TimeCheckThread(pthread_t tgt, int tLimit, IndT* bst): Thread<int>(true), target(tgt), timeLimit(tLimit), best(bst){}
 
 				int run()
 				{
 					sleep(60 * timeLimit);
 					std::cout << "\033[31mTime is up\033[0m\n";
 					std::cout << *best << "\n" ;
-					retVal = pthread_kill(target, SIGTERM);
-					return retVal;
+					return pthread_kill(target, SIGTERM);
 				}
 		};
 
-		//Thread routines-------------------------------------------------------
-		static void* SelectThread(void* args)
+		class SelectThread : public Thread<IndT>
 		{
-#ifdef DEBUG
-			std::cout << __func__ << "(" << pthread_self()%10 << ")\n";
-#endif
-			st_args->setRet(st_args->getPopulation()->Select());
+			private:
+				PopT* pop;
 
-			return NULL;
-		}
+			public:
+				SelectThread() : Thread<IndT>() {}
+				void init(PopT* p) { pop = p; }
+				IndT run()
+				{
+					return pop->Select();
+				}
+		};
 
 	public:
 		//Constructors----------------------------------------------------------
@@ -174,7 +120,6 @@ class ThreadGenAlg : public AbstractGenAlg<IndT, PopT>
 #ifdef DEBUG
 			std::cout << __func__ << "\n";
 #endif
-			selectParent = new pthread_t[this->population.getSize()];
 			nextPop = new IndT[this->population.getSize()];
 		};
 
@@ -185,7 +130,6 @@ class ThreadGenAlg : public AbstractGenAlg<IndT, PopT>
 		//Destructor
 		virtual ~ThreadGenAlg()
 		{
-			delete[] selectParent;
 			delete[] nextPop;
 		}
 
@@ -194,17 +138,16 @@ class ThreadGenAlg : public AbstractGenAlg<IndT, PopT>
 		{
 			int nbSelectThreads = 4;
 			IndT* parents = new IndT[nbSelectThreads];
-			SelectArgs<IndT, PopT> *args = new SelectArgs<IndT, PopT>[nbSelectThreads];
+			SelectThread* selectParent = new SelectThread[nbSelectThreads];
 			TimeCheckThread timer(pthread_self(), this->timeLimit, &this->best);
 			srand(time(0));
 
 			//start timer
 			timer.start();
-			//pthread_create(&timeCheckThread, NULL, timeCheck, &tcArgs);
 
-			//fill arguments structure for selection threads
+			//Initialize selection threads
 			for(int i = 0; i < nbSelectThreads; i++)
-				args[i] = SelectArgs<IndT, PopT>(&(this->population));
+				selectParent[i].init(&this->population);
 
 			//main loop
 			for(int currentGeneration = 0;
@@ -234,13 +177,13 @@ class ThreadGenAlg : public AbstractGenAlg<IndT, PopT>
 #endif
 					//selection
 					for(int j = 0; j < nbSelectThreads; j++)
-						pthread_create(&selectParent[j], NULL, SelectThread, &args[j]);
+						selectParent[j].start();
 
 					for(int j = 0; j < nbSelectThreads; j++)
-						pthread_join(selectParent[j], NULL);
+						selectParent[j].join();
 
 					for(int j = 0; j < nbSelectThreads; j++)
-						parents[j] = args[j].getRet();
+						parents[j] = selectParent[j].retVal;
 
 					//mating and mutation
 					for(int j = 0; j < nbSelectThreads; j += 2)
@@ -280,7 +223,7 @@ class ThreadGenAlg : public AbstractGenAlg<IndT, PopT>
 				this->population.resetChampion();
 			}
 
-			delete[] args;
+			delete[] selectParent;
 			delete[] parents;
 			return this->best;
 		};
