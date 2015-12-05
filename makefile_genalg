@@ -1,0 +1,20 @@
+ccopt=-Wall -Wextra -pedantic -c -o $@ -I. -I../thread
+
+libgenalg.a: AbstractIndividual.o AbstractPopulation.o ThreadPopulation.o genalg.o
+	ar rcs ../$@ $^
+
+AbstractIndividual.o: AbstractIndividual.cpp
+	g++ $(ccopt) $<
+
+AbstractPopulation.o: AbstractPopulation.cpp
+	g++ $(ccopt) $<
+
+genalg.o: genalg.cpp
+	g++ $(ccopt) $<
+
+ThreadPopulation.o: ThreadPopulation.cpp
+	g++ -pthread $(ccopt) $<
+
+clean:
+	rm -f AbstractIndividual.o AbstractPopulation.o ThreadPopulation.o genalg.o
+

@@ -124,8 +124,7 @@ class ThreadGenAlg : public AbstractGenAlg<IndT, PopT>
 		};
 
 		//Copy constructor
-		ThreadGenAlg(const ThreadGenAlg<IndT, PopT>& src):
-			AbstractGenAlg<IndT, PopT> (src) {}
+		ThreadGenAlg(const ThreadGenAlg<IndT, PopT>& src): AbstractGenAlg<IndT, PopT> (src) {}
 
 		//Destructor
 		virtual ~ThreadGenAlg()
