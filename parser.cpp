@@ -1,6 +1,6 @@
 #ifndef PARSER_H
 #define PARSER_H
-#include <Dict.h>
+#include <Dict.cpp>
 #include <string>
 #include <sstream>
 #include <fstream>
